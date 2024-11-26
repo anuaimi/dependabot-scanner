@@ -10,6 +10,7 @@ This script scans all the github repositories for Dependabot alerts and outputs 
 
 ```bash
 export GITHUB_TOKEN=<your_github_token>
+# note, you can use the .env file to load the github token
 bundle install
 ruby dependabot_scanner.rb
 ```
