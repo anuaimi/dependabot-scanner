@@ -8,6 +8,10 @@ This script scans all the github repositories for Dependabot alerts and outputs 
 - Bundler
 - A GitHub personal access token with the necessary permissions
 
+## Usage
+
+Note, when you create the github token, you need to select the `repo` scope otherwise it will only work for public repositories.
+
 ```bash
 export GITHUB_TOKEN=<your_github_token>
 # note, you can use the .env file to load the github token
