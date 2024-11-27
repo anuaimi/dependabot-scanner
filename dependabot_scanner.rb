@@ -4,6 +4,7 @@ require 'dotenv'
 require 'tty-spinner'
 require 'tty-table'
 require 'colorize'
+# require 'debug'
 
 class DependabotScanner
   def initialize
@@ -14,52 +15,70 @@ class DependabotScanner
     Dotenv.require_keys('GITHUB_TOKEN')
 
     @github_token = ENV['GITHUB_TOKEN']
-
     @client = Octokit::Client.new(access_token: @github_token)
     @client.auto_paginate = true
-    @spinner = TTY::Spinner.new('[:spinner] Scanning repositories ...', format: :dots)
+
+    @repositories = @client.repositories
+    @spinners = TTY::Spinner::Multi.new("[:spinner] Scanning #{@repositories.count} repositories")
   end
 
   def scan_repositories
-    repositories = @client.repositories
-    repositories.each do |repo|
-      scan_repository(repo)
+    results = []
+    @repositories.each do |repo|
+      result = scan_repository(repo)
+      results << result if result
     end
+
+    display_results(results)
   end
 
   def scan_repository(repo)
-    @spinner.spin
-    # puts "Scanning repository: #{repo.full_name}"
-    # @client.accept = 'application/vnd.github.dorian-preview+json'
-    alerts = @client.get("/repos/#{repo.full_name}/dependabot/alerts", state: 'open')
+    spinner = @spinners.register("[:spinner] Scanning #{repo.full_name}")
+    spinner.auto_spin
+    
+    result = nil
+    begin
+      alerts = @client.get("/repos/#{repo.full_name}/dependabot/alerts", state: 'open')
 
-    if alerts.any?
-      puts "Found #{alerts.count} alerts"
-      result = {
-        repository: repo.full_name,
-        alert_count: alerts.count,
-        alerts: alerts.map do |alert|
-          {
-            package: alert.security_advisory.package.name,
-            severity: alert.security_advisory.severity,
-            created_at: alert.created_at.to_date.to_s,
-            url: alert.html_url
-          }
-        end
-      }
-      display_results([result])
+      if alerts.any?
+        spinner.error("Found #{alerts.count} alerts for #{repo.full_name}")
+        
+        result = {
+          repository: repo.full_name,
+          alert_count: alerts.count,
+          alert_details: alerts.map do |alert|
+            {
+              message: alert.security_advisory.summary,
+              cve_id: alert.security_advisory.cve_id,
+              # package: alert.security_advisory.package.name,
+              severity: alert.security_advisory.severity,
+              created_at: alert.created_at.to_date.to_s,
+              url: alert.html_url
+            }
+          end
+        }
+      else
+        spinner.success('✓')
+      end
+    rescue Octokit::NotFound
+      spinner.error('✗ Repository not found or no access to security alerts')
+    rescue Octokit::Unauthorized
+      spinner.error('✗ Unauthorized - Check your GitHub token permissions')
+    rescue StandardError => e
+      message = e.message.split(":")[2]
+      spinner.stop("✗ #{message}")
     end
-
-    @spinner.success('✓')
-  rescue Octokit::NotFound
-    @spinner.error('✗ Repository not found or no access to security alerts')
-  rescue Octokit::Unauthorized
-    @spinner.error('✗ Unauthorized - Check your GitHub token permissions')
-  rescue StandardError => e
-    @spinner.error("✗ Error: #{e.message}")
+    
+    result
   end
 
   private
+
+  # display a link that can be clicked in the terminal
+  def print_clickable_link(url, text)
+    # ANSI escape sequences for clickable links
+    puts "\e]8;;#{url}\e\\#{text}\e]8;;\e\\"
+  end
 
   def display_results(results)
     if results.empty?
@@ -70,15 +89,18 @@ class DependabotScanner
     puts "\nOpen Dependabot Alerts Summary:".bold
     puts '==============================='.bold
 
+    puts "Found #{results.count} repositories with open alerts"
+    #put a breakpoint here  
     results.each do |repo_result|
       puts "\nRepository: #{repo_result[:repository]}".blue.bold
       puts "Total Open Alerts: #{repo_result[:alert_count]}".red
 
       table = TTY::Table.new(
-        header: %w[Package Severity Created URL],
-        rows: repo_result[:alerts].map do |alert|
+        header: %w[CVE_id Message Severity Created URL],
+        rows: repo_result[:alert_details].map do |alert|
           [
-            alert[:package],
+            alert[:cve_id],
+            alert[:message],
             colorize_severity(alert[:severity]),
             alert[:created_at],
             alert[:url]
