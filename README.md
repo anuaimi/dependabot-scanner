@@ -22,9 +22,9 @@ ruby dependabot_scanner.rb [options]
 ### Options
 
 - `-q`, `--quiet`: Only output any Dependabot alerts (minimal output).
-- `-v`, `--verbose`: Include list of repos being checked as well as any outstanding alerts (default).
 - `--no_dependabot`: List repos without dependabot enabled.
 - `--dependabot_alerts`: Check repos for open dependabot alerts (default).
+- `-v`, `--version`: current version of the script.
 - `-h`, `--help`: Show help message.
 
 ## Sample Output
