@@ -19,14 +19,26 @@ class DependabotScanner
     @client.auto_paginate = true
 
     @repositories = @client.repositories
-    @spinners = TTY::Spinner::Multi.new("[:spinner] Scanning #{@repositories.count} repositories")
+
+    @has_dependabot_enabled = []
+    @doesnt_have_dependabot_enabled = []
+
+    # go through repos and divide them into two groups
+    inventory_repositories
   end
 
-  def has_dependabot_alerts_enabled(repo)
-    @client.vulnerability_alerts_enabled?(repo.id)
+  def inventory_repositories
+    puts "Inventorying repositories for #{@client.user.login}"
+    @repositories.each do |repo|
+      if has_dependabot_alerts_enabled(repo)
+        @has_dependabot_enabled << repo
+      else
+        @doesnt_have_dependabot_enabled << repo
+      end
+    end
   end
 
-  def scan_repositories
+  def repositories_with_dependabot
     results = []
     @repositories.each do |repo|
 
@@ -37,6 +49,19 @@ class DependabotScanner
         # ignore for now
       end
 
+    end
+  end
+
+  def has_dependabot_alerts_enabled(repo)
+    @client.vulnerability_alerts_enabled?(repo.id)
+  end
+
+  def scan_repositories
+    results = []
+    @spinners = TTY::Spinner::Multi.new("[:spinner] Scanning #{@has_dependabot_enabled.count} repositories")
+    @has_dependabot_enabled.each do |repo|
+      result = scan_repository(repo)
+      results << result if result  
     end
 
     display_results(results)
