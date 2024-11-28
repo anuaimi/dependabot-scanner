@@ -16,7 +16,8 @@ The code uses a Personal Access Token (PAT) to authenticate with GitHub. Note, w
 export GITHUB_TOKEN=<your_github_token>
 # Note, you can also use an .env file to load the GitHub token
 bundle install
-ruby dependabot_scanner.rb [options]
+./dependabot_scanner.rb [options]
+# or `ruby dependabot_scanner.rb [options]`
 ```
 
 ### Options
