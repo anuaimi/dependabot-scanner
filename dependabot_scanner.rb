@@ -8,11 +8,13 @@ require 'debug'
 require 'optparse'
 
 class DependabotScanner
-  attr_accessor :quiet_mode, :verbose_mode
+  attr_accessor :quiet_mode, :verbose_mode, :no_dependabot, :dependabot_alerts
 
   def initialize(options = {})
     @quiet_mode = options[:quiet]
     @verbose_mode = options[:verbose]
+    @no_dependabot = options[:no_dependabot]
+    @dependabot_alerts = options[:dependabot_alerts]
 
     env_path = File.join(__dir__, '.env')
 
@@ -121,6 +123,13 @@ class DependabotScanner
     result
   end
 
+  def list_repositories_without_dependabot
+    puts "Repositories without Dependabot alerts enabled:"
+    @doesnt_have_dependabot_enabled.each do |repo|
+      puts "  #{repo.full_name}"
+    end
+  end
+
   private
 
   # display a link that can be clicked in the terminal
@@ -202,6 +211,14 @@ if __FILE__ == $0
       options[:verbose] = true
     end
 
+    opts.on('--no_dependabot', 'list repos that do not have dependabot enabled') do
+      options[:no_dependabot] = true
+    end
+
+    opts.on('--dependabot_alerts', 'check repos for open dependabot alerts') do
+      options[:dependabot_alerts] = true
+    end
+
     opts.on('-h', '--help', 'Show this help message') do
       puts opts
       exit
@@ -210,10 +227,17 @@ if __FILE__ == $0
 
   # Default to verbose if no options specified
   options[:verbose] = true if !options[:quiet] && !options[:verbose]
+  
+  # Default to checking for dependabot alerts if no options specified
+  options[:dependabot_alerts] = true if !options[:no_dependabot] && !options[:dependabot_alerts]
 
   begin
     scanner = DependabotScanner.new(options)
-    scanner.scan_repositories
+    if options[:dependabot_alerts]
+      scanner.scan_repositories
+    elsif options[:no_dependabot]
+      scanner.list_repositories_without_dependabot
+    end
   rescue StandardError => e
     puts "Error: #{e.message}".red
     exit 1
