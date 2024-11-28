@@ -5,9 +5,15 @@ require 'tty-spinner'
 require 'tty-table'
 require 'colorize'
 require 'debug'
+require 'optparse'
 
 class DependabotScanner
-  def initialize
+  attr_accessor :quiet_mode, :verbose_mode
+
+  def initialize(options = {})
+    @quiet_mode = options[:quiet]
+    @verbose_mode = options[:verbose]
+
     env_path = File.join(__dir__, '.env')
 
     # Load the env file
@@ -68,14 +74,20 @@ class DependabotScanner
   end
 
   def scan_repository(repo)
-    spinner = @spinners.register("[:spinner] Scanning #{repo.full_name}")
-    spinner.auto_spin
+    if @verbose_mode
+      spinner = @spinners.register("[:spinner] Scanning #{repo.full_name}")
+      spinner.auto_spin
+    end
     
     result = nil
     begin
       alerts = @client.get("/repos/#{repo.full_name}/dependabot/alerts", state: 'open')
 
       if alerts.any?
+        if @quiet_mode
+          spinner = @spinners.register("[:spinner] Scanning #{repo.full_name}")
+          spinner.auto_spin
+        end
         spinner.error("Found #{alerts.count} alerts for #{repo.full_name}")
         
         result = {
@@ -93,14 +105,16 @@ class DependabotScanner
           end
         }
       else
-        spinner.success('✓')
+        if @verbose_mode
+          spinner.success('✓')
+        end
       end
-    rescue Octokit::NotFound
-      spinner.error('✗ Repository not found or no access to security alerts')
-    rescue Octokit::Unauthorized
-      spinner.error('✗ Unauthorized - Check your GitHub token permissions')
     rescue StandardError => e
       message = e.message.split(":")[2]
+      if @quiet_mode
+        spinner = @spinners.register("[:spinner] Scanning #{repo.full_name}")
+        spinner.auto_spin
+      end
       spinner.stop("✗ #{message}")
     end
     
@@ -166,8 +180,39 @@ end
 
 # Run the scanner
 if __FILE__ == $0
+  options = {}
+  OptionParser.new do |opts|
+    opts.banner = "Usage: #{$0} [options]"
+
+    opts.on('-q', '--quiet', 'only output any dependabot alerts (minimal output)') do
+      if options[:verbose]
+        puts "Error: Cannot use both quiet and verbose modes".red
+        puts opts
+        exit 1
+      end
+      options[:quiet] = true
+    end
+
+    opts.on('-v', '--verbose', 'include list of repos checking as well as any outstanding alerts (extra output)') do
+      if options[:quiet]
+        puts "Error: Cannot use both quiet and verbose modes".red
+        puts opts
+        exit 1
+      end
+      options[:verbose] = true
+    end
+
+    opts.on('-h', '--help', 'Show this help message') do
+      puts opts
+      exit
+    end
+  end.parse!
+
+  # Default to verbose if no options specified
+  options[:verbose] = true if !options[:quiet] && !options[:verbose]
+
   begin
-    scanner = DependabotScanner.new
+    scanner = DependabotScanner.new(options)
     scanner.scan_repositories
   rescue StandardError => e
     puts "Error: #{e.message}".red
