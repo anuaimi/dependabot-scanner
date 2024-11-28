@@ -4,7 +4,7 @@ require 'dotenv'
 require 'tty-spinner'
 require 'tty-table'
 require 'colorize'
-# require 'debug'
+require 'debug'
 
 class DependabotScanner
   def initialize
@@ -22,11 +22,21 @@ class DependabotScanner
     @spinners = TTY::Spinner::Multi.new("[:spinner] Scanning #{@repositories.count} repositories")
   end
 
+  def has_dependabot_alerts_enabled(repo)
+    @client.vulnerability_alerts_enabled?(repo.id)
+  end
+
   def scan_repositories
     results = []
     @repositories.each do |repo|
-      result = scan_repository(repo)
-      results << result if result
+
+      if has_dependabot_alerts_enabled(repo)
+        result = scan_repository(repo)
+        results << result if result  
+      else
+        # ignore for now
+      end
+
     end
 
     display_results(results)
